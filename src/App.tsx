@@ -51,13 +51,15 @@ import {
 // Thay chữ null bên dưới bằng object config bạn lấy từ Firebase Console.
 // Ví dụ: const customFirebaseConfig = { apiKey: "AIza...", authDomain: "..." };
 // =========================================================================
-const customFirebaseConfig = apiKey: "AIzaSyD3EvyO5f7J-eoyBklY51QaM2JLUAhWiXM",
-authDomain: "quan-ly-a7291.firebaseapp.com",
-projectId: "quan-ly-a7291",
-storageBucket: "quan-ly-a7291.firebasestorage.app",
-messagingSenderId: "286963577707",
-appId: "1:286963577707:web:d47f59a3701870cfe9122e",
-measurementId: "G-JX5WT5H5XV"; 
+const customFirebaseConfig = {
+  apiKey: "AIzaSyO5tvyOSf7J-eoyBKly5lQaM2JLUAhWiXM",
+  authDomain: "quan-ly-a7291.firebaseapp.com",
+  projectId: "quan-ly-a7291",
+  storageBucket: "quan-ly-a7291.firebasestorage.app",
+  messagingSenderId: "286963577707",
+  appId: "1:286963577707:web:d47f59a3701870cfe9122e",
+  measurementId: "G-JX5WT5H5XV"
+};
 
 const firebaseConfig = customFirebaseConfig || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
 const app = initializeApp(firebaseConfig);
