@@ -51,16 +51,15 @@ import {
 // =========================================================================
 // CẤU HÌNH FIREBASE CỦA BẠN (GIỮ NGUYÊN KHÔNG ĐỔI)
 // =========================================================================
-const customFirebaseConfig = {
-  apiKey: "AIzaSyO5tvyOSf7J-eoyBKly5lQaM2JLUAhWiXM",
-  authDomain: "quan-ly-a7291.firebaseapp.com",
-  projectId: "quan-ly-a7291",
-  storageBucket: "quan-ly-a7291.firebasestorage.app",
-  messagingSenderId: "286063577707",
-  appId: "1:286063577707:web:d47f59a3701870cfe9122c",
-  measurementId: "G-JXSVTGHGXV"
-}; 
-
+const firebaseConfig = { 
+  apiKey : "AIzaSyD3EvyO5f7J-eoyBklY51QaM2JLUAhWiXM" , 
+  authDomain : "quan-ly-a7291.firebaseapp.com" , 
+  projectId : "quan-ly-a7291" , 
+  storageBucket : "quan-ly-a7291.firebasestorage.app" , 
+  messagingSenderId : "286963577707" , 
+  appId : "1:286963577707:web:d47f59a3701870cfe9122e" , 
+  measurementId : "G-JX5WT5H5XV" 
+};
 const app = initializeApp(customFirebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
