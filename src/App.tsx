@@ -26,7 +26,8 @@ import {
   Syringe,
   FileQuestion,
   Sparkles,
-  Bot
+  Bot,
+  AlertCircle,
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS & INIT ---
