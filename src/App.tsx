@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   Tag,
   LogOut,
-  Mail,
   Lock,
   Loader2,
   Table as TableIcon,
@@ -28,15 +27,14 @@ import {
   Sparkles,
   Bot,
   AlertCircle,
+  UserCircle
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS & INIT ---
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+  signInAnonymously,
   signOut 
 } from 'firebase/auth';
 import { 
@@ -49,34 +47,34 @@ import {
 } from 'firebase/firestore';
 
 // =========================================================================
-// BƯỚC QUAN TRỌNG: DÁN CẤU HÌNH FIREBASE CỦA RIÊNG BẠN VÀO ĐÂY
-// Thay chữ null bên dưới bằng object config bạn lấy từ Firebase Console.
-// Ví dụ: const customFirebaseConfig = { apiKey: "AIza...", authDomain: "..." };
+// CẤU HÌNH FIREBASE CỦA BẠN (GIỮ NGUYÊN KHÔNG ĐỔI)
 // =========================================================================
 const customFirebaseConfig = {
   apiKey: "AIzaSyO5tvyOSf7J-eoyBKly5lQaM2JLUAhWiXM",
   authDomain: "quan-ly-a7291.firebaseapp.com",
   projectId: "quan-ly-a7291",
   storageBucket: "quan-ly-a7291.firebasestorage.app",
-  messagingSenderId: "286963577707",
-  appId: "1:286963577707:web:d47f59a3701870cfe9122e",
-  measurementId: "G-JX5WT5H5XV"
-};
+  messagingSenderId: "286063577707",
+  appId: "1:286063577707:web:d47f59a3701870cfe9122c",
+  measurementId: "G-JXSVTGHGXV"
+}; 
 
-const firebaseConfig = customFirebaseConfig || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
+// =========================================================================
+// THIẾT LẬP TÀI KHOẢN VÀ MẬT KHẨU CỐ ĐỊNH Ở ĐÂY
+// Bạn có thể sửa chữ 'bacsi' và '123' thành bất cứ gì bạn muốn
+// =========================================================================
+const APP_USERNAME = "bacsi";
+const APP_PASSWORD = "123";
+
+
+const firebaseConfig = customFirebaseConfig;
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-// Hàm lấy đường dẫn lưu trữ Database tuỳ thuộc vào việc bạn đã dùng Config riêng chưa
-const getPatientsRef = (uid) => customFirebaseConfig 
-  ? collection(db, 'users', uid, 'patients') 
-  : collection(db, 'artifacts', appId, 'users', uid, 'patients');
-
-const getPatientDocRef = (uid, patientId) => customFirebaseConfig 
-  ? doc(db, 'users', uid, 'patients', patientId.toString()) 
-  : doc(db, 'artifacts', appId, 'users', uid, 'patients', patientId.toString());
+// Vì dùng chung 1 tài khoản, ta sẽ lưu tất cả vào 1 thư mục cố định tên là 'admin_data'
+const getPatientsRef = () => collection(db, 'users', 'admin_data', 'patients');
+const getPatientDocRef = (patientId) => doc(db, 'users', 'admin_data', 'patients', patientId.toString());
 
 // Các thẻ phân loại mặc định
 const PREDEFINED_TAGS = ['Giao ban', 'Bệnh lạ', 'Ca khó', 'Nghiên cứu KH', 'Theo dõi sát'];
@@ -103,8 +101,9 @@ const BIOCHEM_FIELDS = [
 ];
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  
   const [activeTab, setActiveTab] = useState('calendar');
   const [patients, setPatients] = useState([]);
   
@@ -114,23 +113,32 @@ export default function App() {
   const [selectedReviewTag, setSelectedReviewTag] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // --- FIREBASE AUTH EFFECT ---
+  // --- KIỂM TRA ĐĂNG NHẬP KHI MỞ TRANG ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    const checkLogin = async () => {
+      const isLogged = localStorage.getItem('meditrack_logged_in') === 'true';
+      if (isLogged) {
+        try {
+          // Đăng nhập ẩn danh vào Firebase để được phép đọc/ghi dữ liệu
+          await signInAnonymously(auth);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error("Lỗi kết nối Firebase:", error);
+        }
+      }
       setAuthLoading(false);
-    });
-    return () => unsubscribe();
+    };
+    checkLogin();
   }, []);
 
   // --- FIREBASE FIRESTORE SYNC ---
   useEffect(() => {
-    if (!user) {
+    if (!isAuthenticated) {
       setPatients([]);
       return;
     }
-    const patientsRef = getPatientsRef(user.uid);
     
+    const patientsRef = getPatientsRef();
     const unsubscribe = onSnapshot(patientsRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPatients(data);
@@ -146,7 +154,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [isAuthenticated, selectedDayPatients]);
 
   // --- LOGIC LỊCH ---
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -194,10 +202,9 @@ export default function App() {
   const allUsedTags = Array.from(new Set(patients.flatMap(p => p.tags || [])));
 
   const handleSavePatient = async (patientData) => {
-    if (!user) return;
     try {
       const patientId = patientData.id || Date.now().toString();
-      const docRef = getPatientDocRef(user.uid, patientId);
+      const docRef = getPatientDocRef(patientId);
       await setDoc(docRef, { ...patientData, id: patientId });
       setIsModalOpen(false);
     } catch (err) {
@@ -207,9 +214,9 @@ export default function App() {
   };
 
   const handleDeletePatient = async (patientId) => {
-    if (!user || !confirm("Bạn có chắc chắn muốn xoá hồ sơ này?")) return;
+    if (!confirm("Bạn có chắc chắn muốn xoá hồ sơ này?")) return;
     try {
-      const docRef = getPatientDocRef(user.uid, patientId);
+      const docRef = getPatientDocRef(patientId);
       await deleteDoc(docRef);
       setIsModalOpen(false);
     } catch (err) {
@@ -217,8 +224,10 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth);
+  const handleLogout = async () => {
+    await signOut(auth);
+    localStorage.removeItem('meditrack_logged_in');
+    setIsAuthenticated(false);
   };
 
   // --- MÀN HÌNH TẢI & XÁC THỰC ---
@@ -226,8 +235,8 @@ export default function App() {
     return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
   }
 
-  if (!user) {
-    return <AuthScreen customFirebaseConfig={customFirebaseConfig} />;
+  if (!isAuthenticated) {
+    return <AuthScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
 
   return (
@@ -239,8 +248,8 @@ export default function App() {
             <Activity className="w-8 h-8" />
             MediTrack
           </h1>
-          <p className="text-slate-400 text-xs mt-1 break-all flex items-center gap-1">
-            <Mail className="w-3 h-3" /> {user.email}
+          <p className="text-slate-400 text-xs mt-1 flex items-center gap-1">
+             Đã đăng nhập: <span className="text-emerald-400 font-bold">{APP_USERNAME}</span>
           </p>
         </div>
         
@@ -465,11 +474,10 @@ export default function App() {
 }
 
 // ==========================================
-// COMPONENT: MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ
+// COMPONENT: MÀN HÌNH ĐĂNG NHẬP MỚI (TÊN/MK CỐ ĐỊNH)
 // ==========================================
-function AuthScreen({ customFirebaseConfig }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+function AuthScreen({ onLoginSuccess }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -478,19 +486,21 @@ function AuthScreen({ customFirebaseConfig }) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Kiểm tra tên đăng nhập và mật khẩu cứng
+    if (username === APP_USERNAME && password === APP_PASSWORD) {
+      try {
+         // Đăng nhập ẩn danh vào Firebase để lấy quyền kết nối DB
+         await signInAnonymously(auth);
+         // Lưu trạng thái vào bộ nhớ trình duyệt để không phải đăng nhập lại nhiều lần
+         localStorage.setItem('meditrack_logged_in', 'true');
+         onLoginSuccess();
+      } catch (err) {
+         setError('Không thể kết nối đến máy chủ dữ liệu. Hãy kiểm tra mạng.');
+         setLoading(false);
       }
-    } catch (err) {
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Chức năng Đăng nhập Email đang bị khoá. Vui lòng dán Config Firebase của riêng bạn vào dòng số 38 trong code để sử dụng chức năng này!');
-      } else {
-        setError(err.message.includes('auth/') ? 'Email hoặc mật khẩu không hợp lệ.' : err.message);
-      }
-    } finally {
+    } else {
+      setError('Tên đăng nhập hoặc mật khẩu không chính xác!');
       setLoading(false);
     }
   };
@@ -513,22 +523,16 @@ function AuthScreen({ customFirebaseConfig }) {
           </div>
         )}
 
-        {!customFirebaseConfig && (
-          <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-sm mb-4 border border-amber-200">
-            <strong>⚠️ Lưu ý:</strong> Bạn chưa thiết lập Firebase Config của riêng mình. Hãy làm theo hướng dẫn của AI để đồng bộ dữ liệu.
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Email</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Tên đăng nhập</label>
             <div className="relative">
-              <Mail className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
+              <UserCircle className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
               <input 
-                type="email" required
-                value={email} onChange={(e) => setEmail(e.target.value)}
+                type="text" required
+                value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="bacsi@example.com" 
+                placeholder="Ví dụ: bacsi" 
               />
             </div>
           </div>
@@ -537,7 +541,7 @@ function AuthScreen({ customFirebaseConfig }) {
             <div className="relative">
               <Lock className="w-5 h-5 text-slate-400 absolute left-3 top-3" />
               <input 
-                type="password" required minLength={6}
+                type="password" required
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="••••••••" 
@@ -546,18 +550,11 @@ function AuthScreen({ customFirebaseConfig }) {
           </div>
           <button 
             type="submit" disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center mt-2"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? 'Đăng Nhập' : 'Tạo Tài Khoản')}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mở khoá Bệnh Án'}
           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-slate-500">
-          {isLogin ? "Chưa có tài khoản? " : "Đã có tài khoản? "}
-          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="text-blue-600 font-bold hover:underline">
-            {isLogin ? 'Đăng ký ngay' : 'Đăng nhập'}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -731,9 +728,8 @@ function PatientModal({ patient, onClose, onSave, onDelete }) {
   // --- LOGIC TẠO TÓM TẮT BẰNG AI ---
   const generateAISummary = async () => {
     setIsGeneratingAI(true);
-    const apiKey = ""; // Canvas runtime sẽ cung cấp key ở đây
+    const apiKey = ""; 
     
-    // Tổng hợp thông tin để prompt
     const rxStr = (formData.prescriptions || []).map(p => `- ${p.startDate || ''}: ${p.name} ${p.dosage} ${p.route} (${p.days ? p.days+' ngày' : ''})`).join('\n');
     const recordsStr = (formData.dailyRecords || []).map(r => `Ngày ${r.date}: Lâm sàng: ${r.clinical}. XN CTM: WBC ${r.cbc.wbc}, RBC ${r.cbc.rbc}, HGB ${r.cbc.hgb}, PLT ${r.cbc.plt}. Sinh hoá: Glu ${r.biochem.glu}, Urea ${r.biochem.urea}, Crea ${r.biochem.crea}, AST/ALT ${r.biochem.ast}/${r.biochem.alt}. Khác: ${r.others}`).join('\n');
     
